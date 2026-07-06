@@ -1,0 +1,83 @@
+### ============================================
+### AUTH SERVICE TESTOVI
+### Base URL: http://localhost:8085
+### ============================================
+
+### 1. REGISTRACIJA NOVOG KORISNIKA
+POST http://localhost:8085/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "pera",
+  "roles": ["ROLE_ADMIN"]
+}
+
+### 2. REGISTRACIJA - DODATNI KORISNIK (za testiranje)
+POST http://localhost:8085/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "zika_zikic",
+  "email": "zika@example.com",
+  "password": "sifra123"
+}
+
+### 3. REGISTRACIJA - DODATNI KORISNIK (guest)
+POST http://localhost:8083/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "mica_micic",
+  "email": "mica@example.com",
+  "password": "sifra123"
+}
+
+### 4. VALIDACIJA API KLJUČA (uspešno)
+### Zameni API-KEY sa ključem koji dobiješ iz registracije
+GET http://localhost:8085/api/auth/validate
+X-API-KEY: 32e502f67ece # RAF-PERA_PERI-1744320000-abc123def456-xyz789
+
+### 5. VALIDACIJA API KLJUČA (neuspešno - pogrešan ključ)
+GET http://localhost:8083/api/auth/validate
+X-API-KEY: RAF-POGRESAN-KLJUC-123
+
+### 6. VALIDACIJA API KLJUČA (neuspešno - prazan header)
+GET http://localhost:8083/api/auth/validate
+
+### 7. PRONALAZENJE KORISNIKA PO USERNAME-u (uspešno)
+GET http://localhost:8083/api/auth/find/pera_peric
+
+### 8. PRONALAZENJE KORISNIKA PO USERNAME-u (neuspešno - ne postoji)
+GET http://localhost:8083/api/auth/find/nepoznati_korisnik
+
+### ============================================
+### TESTIRANJE SA VEĆ POSTOJEĆIM KORISNICIMA (iz data.sql)
+### ============================================
+
+### 9. VALIDACIJA - ADMIN KORISNIK
+### (API ključ iz data.sql)
+GET http://localhost:8083/api/auth/validate
+X-API-KEY: RAF-ADMIN-1744320000-abc123def456-admin
+
+### 10. VALIDACIJA - GUEST KORISNIK
+GET http://localhost:8083/api/auth/validate
+X-API-KEY: RAF-GUEST-1744320000-ghi789jkl012-guest
+
+### 11. VALIDACIJA - GUIDE KORISNIK
+GET http://localhost:8083/api/auth/validate
+X-API-KEY: RAF-GUIDE-1744320000-mno345pqr678-guide
+
+### 12. PRONALAZENJE ADMIN KORISNIKA
+GET http://localhost:8083/api/auth/find/admin
+
+### 13. PRONALAZENJE GUEST KORISNIKA
+GET http://localhost:8083/api/auth/find/guest1
+
+### ============================================
+### NAPOMENE:
+### 1. Prvo pokreni Auth Service (port 8083)
+### 2. Prvo uradi REGISTRACIJU da dobiješ API ključ
+### 3. Kopiraj dobijeni API ključ u validate zahteve
+### 4. Za testiranje sa admin/guest korisnicima,
+###    moraš prvo da pokreneš data.sql (automatski)
+### ============================================

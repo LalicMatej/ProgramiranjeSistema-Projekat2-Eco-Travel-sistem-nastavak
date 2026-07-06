@@ -1,0 +1,6 @@
+.idea/
+target/
+*.iml
+.git/
+README.md
+test-api.http

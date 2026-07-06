@@ -1,0 +1,417 @@
+services:
+  zipkin:
+    image: openzipkin/zipkin:3
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - micro-network
+
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - micro-network
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    configs:
+      - source: grafana_datasources
+        target: /etc/grafana/provisioning/datasources/datasources.yaml
+      - source: grafana_dashboards
+        target: /etc/grafana/provisioning/dashboards/dashboards.yaml
+    depends_on:
+      - loki
+    networks:
+      - micro-network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - micro-network
+
+  db-mysql:
+    image: mysql:8.0
+    container_name: mysql-db
+    environment:
+      MYSQL_DATABASE: ps_db
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - micro-network
+
+  discovery-server:
+    build:
+      context: ./discovery-server
+    container_name: discovery-server
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: on-failure
+    networks:
+      - micro-network
+
+  configservice:
+    build:
+      context: ./ConfigService
+    image: configservice:local
+    container_name: configservice
+    environment:
+      SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS: "file:/config"
+    volumes:
+      - ./ConfigService/src/main/resources/config:/config:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8888/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    networks:
+      - micro-network
+
+  smestaj:
+    build:
+      context: .
+      dockerfile: smestaj/Dockerfile
+    image: smestaj:local
+    # container_name je uklonjen da bi deploy.replicas mogao da radi
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configservice:8888"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://db-mysql:3306/smestajservis?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_DRIVERCLASSNAME: com.mysql.cj.jdbc.Driver
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+      SPRING_SQL_INIT_MODE: always
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://discovery-server:8761/eureka/"
+    deploy:
+      replicas: 3
+    depends_on:
+      configservice:
+        condition: service_healthy
+      db-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - micro-network
+
+  odrzavanje:
+    build:
+      context: .
+      dockerfile: odrzavanje/Dockerfile
+    image: odrzavanje:local
+    container_name: odrzavanje
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configservice:8888"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://db-mysql:3306/odrzavanjeservis?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_DRIVERCLASSNAME: com.mysql.cj.jdbc.Driver
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "true"
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+      SPRING_SQL_INIT_MODE: always
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://discovery-server:8761/eureka/"
+    depends_on:
+      configservice:
+        condition: service_healthy
+      db-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - micro-network
+
+  authservice:
+    build:
+      context: ./AuthService
+    image: authservice:local
+    container_name: authservice
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configservice:8888"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://db-mysql:3306/authdb?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_DRIVERCLASSNAME: com.mysql.cj.jdbc.Driver
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+      SPRING_SQL_INIT_MODE: always
+      SPRING_SQL_INIT_DATA_LOCATIONS: classpath:data.sql
+    depends_on:
+      configservice:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      db-mysql:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - micro-network
+
+  avanture-service:
+    build:
+      context: .
+      dockerfile: avanture-service/Dockerfile
+    image: avanture-service:local
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configservice:8888"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://db-mysql:3306/avantureservis?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_DRIVERCLASSNAME: com.mysql.cj.jdbc.Driver
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_JPA_HIBERNATE_DDL_AUTO: create
+      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "true"
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+      SPRING_SQL_INIT_MODE: always
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      configservice:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      db-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+    deploy:
+      replicas: 3
+    networks:
+      - micro-network
+
+  vodici-service:
+    build:
+      context: .
+      dockerfile: vodici-service/Dockerfile
+    image: vodici-service:local
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configservice:8888"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://db-mysql:3306/vodiciServis?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_DRIVERCLASSNAME: com.mysql.cj.jdbc.Driver
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_JPA_HIBERNATE_DDL_AUTO: create
+      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "true"
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+      SPRING_SQL_INIT_MODE: always
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      configservice:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      db-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+    deploy:
+      replicas: 3
+    networks:
+      - micro-network
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: booking-service/Dockerfile
+    image: booking-service:local
+    container_name: booking-service
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:mysql://db-mysql:3306/bookingdb?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_DRIVERCLASSNAME: com.mysql.cj.jdbc.Driver
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "true"
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+      SPRING_SQL_INIT_MODE: always
+      SPRING_SQL_INIT_SCHEMA_LOCATIONS: optional:classpath:/disabled-schema.sql
+      SPRING_SQL_INIT_DATA_LOCATIONS: classpath:data.sql
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      configservice:
+        condition: service_healthy
+      db-mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - micro-network
+
+  finance-service:
+    build:
+      context: .
+      dockerfile: finance-service/Dockerfile
+    image: finance-service:local
+    container_name: finance-service
+    environment:
+      BOOKING_SERVICE_BASE_URL: "http://booking-service:8084"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://db-mysql:3306/financedb?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_DRIVERCLASSNAME: com.mysql.cj.jdbc.Driver
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "true"
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+      SPRING_SQL_INIT_MODE: always
+      SPRING_SQL_INIT_SCHEMA_LOCATIONS: optional:classpath:/disabled-schema.sql
+      SPRING_SQL_INIT_DATA_LOCATIONS: classpath:data.sql
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      configservice:
+        condition: service_healthy
+      db-mysql:
+        condition: service_healthy
+      booking-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - micro-network
+
+  gateway:
+    build:
+      context: ./gatewayService
+    image: gateway:local
+    container_name: gateway
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configservice:8888"
+      AUTH_SERVICE_URL: "http://authservice:8085"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://discovery-server:8761/eureka/"
+    depends_on:
+      configservice:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - micro-network
+
+  # 6. ADMINER
+  adminer:
+      image: adminer
+      container_name: adminer-cont
+      ports:
+        - "8090:8080"
+      networks:
+        - micro-network
+
+volumes:
+  mysql_data:
+  grafana_data:
+
+configs:
+  grafana_datasources:
+    content: |
+      apiVersion: 1
+      datasources:
+        - name: Loki
+          uid: loki
+          type: loki
+          access: proxy
+          url: http://loki:3100
+          isDefault: true
+          editable: false
+        - name: MySQL
+          uid: mysql
+          type: mysql
+          access: proxy
+          url: db-mysql:3306
+          user: root
+          database: avantureservis
+          secureJsonData:
+            password: root
+          jsonData:
+            maxOpenConns: 10
+            maxIdleConns: 5
+  grafana_dashboards:
+    content: |
+      apiVersion: 1
+      providers:
+        - name: Default
+          orgId: 1
+          type: file
+          disableDeletion: false
+          updateIntervalSeconds: 10
+          options:
+            path: /var/lib/grafana/dashboards
+
+networks:
+  micro-network:
+    driver: bridge

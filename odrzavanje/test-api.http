@@ -1,0 +1,55 @@
+### 1. Kreiraj radnika
+POST http://localhost:8082/api/worker/save
+Content-Type: application/json
+
+{
+  "firstName": "Nikola",
+  "lastName": "Nikolić",
+  "speciality": "ELEKTRIČAR"
+}
+
+### 2. Kreiraj zadatak
+POST http://localhost:8082/api/maintenanceTask/save
+Content-Type: application/json
+
+{
+  "taskName": "Popravka mašine za veš",
+  "estimatedDurationHours": 3
+}
+
+### 3. Kreiraj radni nalog
+POST http://localhost:8082/api/workOrder/save
+Content-Type: application/json
+
+{
+  "unitId": 1,
+  "workerId": 1,
+  "status": "PENDING",
+  "maintenanceTaskId": 1,
+  "scheduledFor": "2027-07-25T10:00:00"
+}
+
+### 4. Dohvati sve radnike
+GET http://localhost:8082/api/worker/workers
+
+### 5. Dohvati sve zadatke
+GET http://localhost:8082/api/maintenanceTask/all
+
+### 6. Dohvati sve radne naloge
+GET http://localhost:8082/api/workOrder/all
+
+### 7. Dohvati status radnog naloga
+GET http://localhost:8082/api/workOrder/status/3
+
+### 8. Ažuriraj status (PENDING -> IN_PROGRESS)
+PATCH http://localhost:8082/api/workOrder/updateStatus/3?notes=mojnotes
+
+### 9. Ažuriraj status (IN_PROGRESS -> COMPLETED)                    OVO SREDITI
+PATCH http://localhost:8082/api/workOrder/updateStatus/2?notes=update2
+
+### 10. Prosečno trajanje održavanja
+GET http://localhost:8082/api/maintenanceLog/avgMaintenanceDuration/101
+
+
+### 11. delete workera
+DELETE http://localhost:8082/api/worker/6

@@ -1,0 +1,927 @@
+### PS Project 2 - Gateway Endpoints
+### Base URL: http://localhost:8083
+### Compatible with: JetBrains HTTP Client, VS Code REST Client
+
+@base = http://localhost:8083
+@apiKey = RAF-ADMIN-1744320000-abc123def456-admin
+
+
+# ─────────────────────────────────────────────
+# AUTH SERVICE
+# ─────────────────────────────────────────────
+
+### Register User
+POST {{base}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "roles": ["USER"]
+}
+
+### Validate API Key
+GET {{base}}/api/auth/validate
+X-API-KEY: test-key
+
+### Find User by Username
+GET {{base}}/api/auth/find/testuser
+
+
+# ─────────────────────────────────────────────
+# SMESTAJ - UNITS
+# ─────────────────────────────────────────────
+
+### Create Unit
+POST {{base}}/api/units/add
+Content-Type: application/json
+X-API-KEY: {{apiKey}}
+
+{
+  "name": "Apartman Centar",
+  "unit_type": "APARTMAN",
+  "basePricePerNight": 89.99,
+  "streetAddress": "Knez Mihailova 25",
+  "city": "Beograd",
+  "zip_code": "11000"
+}
+
+> {%
+    client.test("Create Unit - 201 i kreirana jedinica", function() {
+        client.assert(response.status === 201, "Ocekivan status 201, dobijen " + response.status);
+        client.assert(response.body.id !== undefined, "Odgovor mora sadrzati id kreirane jedinice");
+        client.assert(response.body.name === "Apartman Centar", "Ime kreirane jedinice se ne poklapa");
+    });
+    client.global.set("createdUnitId", response.body.id);
+%}
+
+### Get All Units
+GET {{base}}/api/units/all
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get All Units - 200 i lista jedinica", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz jedinica");
+    });
+%}
+
+### Get Unit by ID
+GET {{base}}/api/units/1
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get Unit by ID - vraca jedinicu sa id=1", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(response.body.id === 1, "Vracena jedinica nema ocekivani id=1");
+    });
+%}
+
+### Check Unit Exists
+GET {{base}}/api/units/1/exists
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Check Unit Exists - true za postojecu jedinicu", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(response.body === true, "Jedinica sa id=1 bi trebalo da postoji");
+    });
+%}
+
+### Search Units by Name
+GET {{base}}/api/units/search?name=Apart
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Search Units by Name - 200 i lista jedinica", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz jedinica");
+    });
+%}
+
+### Find Units by Parameters
+GET {{base}}/api/units/findByParameters?type=APARTMAN&minPrice=50&maxPrice=200
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Find Units by Parameters - 200 i lista jedinica", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz jedinica");
+    });
+%}
+
+### Find Units by City
+GET {{base}}/api/units/city?city=Beograd
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Find Units by City - 200 i lista jedinica", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz jedinica");
+    });
+%}
+
+### Calculate Price for Unit
+GET {{base}}/api/units/1/calculate-price?startDate=2027-06-01&endDate=2027-06-07
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Calculate Price - 200 i izracunata cena", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(typeof response.body === "number", "Cena mora biti broj");
+    });
+%}
+
+### Get Unit with Work Orders
+GET {{base}}/api/units/1/with-work-orders
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get Unit with Work Orders - 200", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+    });
+%}
+
+### Get Units with Works In Progress
+GET {{base}}/api/units/unitsWithsWorksInProgress
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get Units with Works In Progress - 200 i lista", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz jedinica");
+    });
+%}
+
+### Get City Statistics
+GET {{base}}/api/units/cityStatistics
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get City Statistics - 200 i lista statistika", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz statistika");
+    });
+%}
+
+
+# ─────────────────────────────────────────────
+# SMESTAJ - RESERVATIONS
+# ─────────────────────────────────────────────
+
+### Add Availability Calendar Entry
+POST {{base}}/api/reserve/add
+Content-Type: application/json
+X-API-KEY: {{apiKey}}
+
+{
+  "startDate": "2027-06-01",
+  "endDate": "2027-06-07",
+  "reason": "Sezonska rezervacija",
+  "unitName": "Apartman Centar",
+  "unitType": "APARTMAN"
+}
+
+> {%
+    client.test("Add Reservation - 200 uspesno kreirana rezervacija", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+    });
+%}
+
+
+
+### Add Price Tier
+POST {{base}}/api/priceTiers/add
+Content-Type: application/json
+X-API-KEY: {{apiKey}}
+
+{
+  "name": "Letnja sezona",
+  "multiplier": 1.5,
+  "startDate": "2027-06-01",
+  "endDate": "2027-08-31",
+  "unitId": 1
+}
+
+> {%
+    client.test("Add Price Tier - 201 i kreirani cenovnik", function() {
+        client.assert(response.status === 201, "Ocekivan status 201, dobijen " + response.status);
+        client.assert(response.body.name === "Letnja sezona", "Ime cenovnika se ne poklapa");
+    });
+%}
+
+
+
+### Create Work Order
+POST {{base}}/api/workOrder/save
+Content-Type: application/json
+X-API-KEY: {{apiKey}}
+
+{
+  "unitId": 1,
+  "status": "PENDING",
+  "scheduledFor": "2027-06-15T10:00:00",
+  "workerId": 1,
+  "maintenanceTaskId": 1
+}
+
+> {%
+    client.test("Create Work Order - 201 i kreiran nalog sa statusom PENDING", function() {
+        client.assert(response.status === 201, "Ocekivan status 201, dobijen " + response.status);
+        client.assert(response.body.status === "PENDING", "Status novog naloga mora biti PENDING");
+    });
+%}
+
+### Get All Work Orders
+GET {{base}}/api/workOrder/all
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get All Work Orders - 200 i lista naloga", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz radnih naloga");
+    });
+%}
+
+### Get Work Order Status
+GET {{base}}/api/workOrder/status/1
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get Work Order Status - 200", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+    });
+%}
+
+### Update Work Order Status
+PATCH {{base}}/api/workOrder/updateStatus/1?notes=Zavrseno%20bez%20problema
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Update Work Order Status - 200", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+    });
+%}
+
+### Get Work Orders by Unit
+GET {{base}}/api/workOrder/byUnit/1
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get Work Orders by Unit - 200 i lista naloga", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz radnih naloga");
+    });
+%}
+
+### Get Work Order Statistics
+GET {{base}}/api/workOrder/statistics/1
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get Work Order Statistics - 200", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+    });
+%}
+
+### Get Work Orders In Progress
+GET {{base}}/api/workOrder/inProgress
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get Work Orders In Progress - 200 i lista naloga", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz radnih naloga");
+    });
+%}
+
+### Delete Unit (brise jedinicu kreiranu na pocetku ovog bloka, ne seed podatke)
+DELETE {{base}}/api/units/{{createdUnitId}}
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Delete Unit - 200 uspesno obrisana kreirana jedinica", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+    });
+%}
+
+
+# ─────────────────────────────────────────────
+# ODRZAVANJE - WORKERS
+# ─────────────────────────────────────────────
+
+### Create Worker
+POST {{base}}/api/worker/save
+Content-Type: application/json
+X-API-KEY: {{apiKey}}
+
+{
+  "firstName": "Marko",
+  "lastName": "Markovic",
+  "speciality": "Elektrotehnicar"
+}
+
+> {%
+    client.test("Create Worker - 201 i kreiran radnik", function() {
+        client.assert(response.status === 201, "Ocekivan status 201, dobijen " + response.status);
+        client.assert(response.body.id !== undefined, "Odgovor mora sadrzati id kreiranog radnika");
+    });
+    client.global.set("createdWorkerId", response.body.id);
+%}
+
+### Get All Workers
+GET {{base}}/api/worker/workers
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get All Workers - 200 i lista radnika", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz radnika");
+    });
+%}
+
+### Get Workers by Speciality
+GET {{base}}/api/worker/workers?speciality=Elektrotehnicar
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get Workers by Speciality - 200 i lista radnika", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz radnika");
+    });
+%}
+
+### Get Worker Stats by Speciality
+GET {{base}}/api/worker/statsBySpeciality
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get Worker Stats by Speciality - 200 i lista statistika", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz statistika");
+    });
+%}
+
+### Delete Worker (brise radnika kreiranog iznad, ne radnika iz seed podataka)
+DELETE {{base}}/api/worker/{{createdWorkerId}}
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Delete Worker - 204 uspesno obrisan kreiran radnik", function() {
+        client.assert(response.status === 204, "Ocekivan status 204, dobijen " + response.status);
+    });
+%}
+
+
+# ─────────────────────────────────────────────
+# ODRZAVANJE - MAINTENANCE TASKS
+# ─────────────────────────────────────────────
+
+### Create Maintenance Task
+POST {{base}}/api/maintenanceTask/save
+Content-Type: application/json
+X-API-KEY: {{apiKey}}
+
+{
+  "taskName": "Servisiranje elektricnih instalacija",
+  "estimatedDurationHours": 4
+}
+
+> {%
+    client.test("Create Maintenance Task - 201 i kreiran zadatak", function() {
+        client.assert(response.status === 201, "Ocekivan status 201, dobijen " + response.status);
+        client.assert(response.body.taskName === "Servisiranje elektricnih instalacija", "Naziv zadatka se ne poklapa");
+    });
+%}
+
+### Get All Maintenance Tasks
+GET {{base}}/api/maintenanceTask/all
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get All Maintenance Tasks - 200 i lista zadataka", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(Array.isArray(response.body), "Odgovor mora biti niz zadataka");
+    });
+%}
+
+
+# ─────────────────────────────────────────────
+# ODRZAVANJE - MAINTENANCE LOGS
+# ─────────────────────────────────────────────
+
+### Get Average Maintenance Duration for Unit
+GET {{base}}/api/maintenanceLog/avgMaintenanceDuration/1
+X-API-KEY: {{apiKey}}
+
+> {%
+    client.test("Get Average Maintenance Duration - 200 i broj sati", function() {
+        client.assert(response.status === 200, "Ocekivan status 200, dobijen " + response.status);
+        client.assert(typeof response.body === "number", "Prosecno trajanje mora biti broj");
+    });
+%}
+
+
+# ─────────────────────────────────────────────
+# AVANTURE - ADVENTURE CATEGORIES
+# ─────────────────────────────────────────────
+
+### Create Category
+POST {{base}}/api/avanture/adventurecategories/add
+Content-Type: application/json
+
+{
+  "name": "Planinarenje",
+  "description": "Aktivnosti na planini i velik uspon"
+}
+
+### Get All Categories
+GET {{base}}/api/avanture/adventurecategories/all
+
+### Get Category by ID
+GET {{base}}/api/avanture/adventurecategories/1
+
+### Update Category
+PUT {{base}}/api/avanture/adventurecategories/update/1
+Content-Type: application/json
+
+{
+  "name": "Planinarenje - Azurirano",
+  "description": "Azuriran opis kategorije"
+}
+
+### Delete Category
+DELETE {{base}}/api/avanture/adventurecategories/delete/1
+
+
+# ─────────────────────────────────────────────
+# AVANTURE - ADVENTURES
+# ─────────────────────────────────────────────
+
+### Create Adventure
+POST {{base}}/api/avanture/adventures/add
+Content-Type: application/json
+
+{
+  "title": "Planinski uspon",
+  "description": "Uzbudljiva avantura na planini",
+  "difficulty_level": "MEDIUM",
+  "base_price": 150.0,
+  "adventure_categoriesRequest": {
+    "name": "Planinarenje",
+    "description": "Velik uspon"
+  },
+  "guide_id": 1,
+  "guideLevelRequired": 2
+}
+
+### Get All Adventures
+GET {{base}}/api/avanture/adventures/all
+
+### Get Adventure by ID
+GET {{base}}/api/avanture/adventures/1
+
+### Update Adventure
+PUT {{base}}/api/avanture/adventures/update/1
+Content-Type: application/json
+
+{
+  "title": "Planinski uspon - Azurirano",
+  "description": "Azuriran opis avanture",
+  "difficulty_level": "HARD",
+  "base_price": 200.0,
+  "adventure_categoriesRequest": {
+    "name": "Planinarenje",
+    "description": "Velik uspon"
+  },
+  "guide_id": 1,
+  "guideLevelRequired": 3
+}
+
+### Delete Adventure
+DELETE {{base}}/api/avanture/adventures/delete/1
+
+### Get Total Price
+GET {{base}}/api/avanture/adventures/totalprice
+
+
+# ─────────────────────────────────────────────
+# AVANTURE - REVIEWS
+# ─────────────────────────────────────────────
+
+### Create Review
+POST {{base}}/api/avanture/adventurereviews/add
+Content-Type: application/json
+
+{
+  "rating": 5,
+  "comment": "Odlicna avantura, preporucujem!",
+  "created_at": "2026-05-12",
+  "adventuresRequest": {
+    "title": "Planinski uspon",
+    "description": "Uzbudljiva avantura na planini",
+    "difficulty_level": "MEDIUM",
+    "base_price": 150.0,
+    "adventure_categoriesRequest": {
+      "name": "Planinarenje",
+      "description": "Velik uspon"
+    },
+    "guide_id": 1,
+    "guideLevelRequired": 2
+  }
+}
+
+### Get All Reviews
+GET {{base}}/api/avanture/adventurereviews/all
+
+### Get Review by ID
+GET {{base}}/api/avanture/adventurereviews/1
+
+### Update Review
+PUT {{base}}/api/avanture/adventurereviews/update/1
+Content-Type: application/json
+
+{
+  "rating": 4,
+  "comment": "Dobra avantura",
+  "created_at": "2026-05-12",
+  "adventuresRequest": {
+    "title": "Planinski uspon",
+    "description": "Uzbudljiva avantura na planini",
+    "difficulty_level": "MEDIUM",
+    "base_price": 150.0,
+    "adventure_categoriesRequest": {
+      "name": "Planinarenje",
+      "description": "Velik uspon"
+    },
+    "guide_id": 1,
+    "guideLevelRequired": 2
+  }
+}
+
+### Delete Review
+DELETE {{base}}/api/avanture/adventurereviews/delete/1
+
+
+# ─────────────────────────────────────────────
+# AVANTURE - ANNOUNCEMENTS
+# ─────────────────────────────────────────────
+
+### Create Announcement
+POST {{base}}/api/avanture/announcements/add
+Content-Type: application/json
+
+{
+  "title": "Nova letnja avantura",
+  "description": "Prijavite se na nasu novu planinarsku turu",
+  "timeSlotsRequest": {
+    "termMark": "JUTRO",
+    "startTime": "2026-07-01",
+    "endTime": "2026-07-02",
+    "max_capacity": 10,
+    "current_occupancy": 0,
+    "adventuresRequest": {
+      "title": "Planinski uspon",
+      "description": "Uzbudljiva avantura na planini",
+      "difficulty_level": "MEDIUM",
+      "base_price": 150.0,
+      "adventure_categoriesRequest": {
+        "name": "Planinarenje",
+        "description": "Velik uspon"
+      },
+      "guide_id": 1,
+      "guideLevelRequired": 2
+    }
+  }
+}
+
+### Get All Announcements
+GET {{base}}/api/avanture/announcements/all
+
+### Get Announcement by ID
+GET {{base}}/api/avanture/announcements/1
+
+### Update Announcement
+PUT {{base}}/api/avanture/announcements/update/1
+Content-Type: application/json
+
+{
+  "title": "Azurirana objava",
+  "description": "Azuriran opis objave",
+  "timeSlotsRequest": {
+    "termMark": "PODNE",
+    "startTime": "2026-07-05",
+    "endTime": "2026-07-06",
+    "max_capacity": 15,
+    "current_occupancy": 0,
+    "adventuresRequest": {
+      "title": "Planinski uspon",
+      "description": "Uzbudljiva avantura na planini",
+      "difficulty_level": "MEDIUM",
+      "base_price": 150.0,
+      "adventure_categoriesRequest": {
+        "name": "Planinarenje",
+        "description": "Velik uspon"
+      },
+      "guide_id": 1,
+      "guideLevelRequired": 2
+    }
+  }
+}
+
+### Delete Announcement
+DELETE {{base}}/api/avanture/announcements/delete/1
+
+
+# ─────────────────────────────────────────────
+# AVANTURE - GEAR REQUIREMENTS
+# ─────────────────────────────────────────────
+
+### Create Gear Requirement
+POST {{base}}/api/avanture/gearrequirements/add
+Content-Type: application/json
+
+{
+  "item_name": "Planinarskie cizme",
+  "is_mandatory": true,
+  "adventuresRequest": {
+    "title": "Planinski uspon",
+    "description": "Uzbudljiva avantura na planini",
+    "difficulty_level": "MEDIUM",
+    "base_price": 150.0,
+    "adventure_categoriesRequest": {
+      "name": "Planinarenje",
+      "description": "Velik uspon"
+    },
+    "guide_id": 1,
+    "guideLevelRequired": 2
+  }
+}
+
+### Get All Gear Requirements
+GET {{base}}/api/avanture/gearrequirements/all
+
+### Get Gear Requirement by ID
+GET {{base}}/api/avanture/gearrequirements/1
+
+### Update Gear Requirement
+PUT {{base}}/api/avanture/gearrequirements/update/1
+Content-Type: application/json
+
+{
+  "item_name": "Planinarskie cizme - Azurirano",
+  "is_mandatory": false,
+  "adventuresRequest": {
+    "title": "Planinski uspon",
+    "description": "Uzbudljiva avantura na planini",
+    "difficulty_level": "MEDIUM",
+    "base_price": 150.0,
+    "adventure_categoriesRequest": {
+      "name": "Planinarenje",
+      "description": "Velik uspon"
+    },
+    "guide_id": 1,
+    "guideLevelRequired": 2
+  }
+}
+
+### Delete Gear Requirement
+DELETE {{base}}/api/avanture/gearrequirements/delete/1
+
+
+# ─────────────────────────────────────────────
+# AVANTURE - TIME SLOTS
+# ─────────────────────────────────────────────
+
+### Create Time Slot
+POST {{base}}/api/avanture/timeslots/add
+Content-Type: application/json
+
+{
+  "termMark": "JUTRO",
+  "startTime": "2026-07-01",
+  "endTime": "2026-07-02",
+  "max_capacity": 10,
+  "current_occupancy": 0,
+  "adventuresRequest": {
+    "title": "Planinski uspon",
+    "description": "Uzbudljiva avantura na planini",
+    "difficulty_level": "MEDIUM",
+    "base_price": 150.0,
+    "adventure_categoriesRequest": {
+      "name": "Planinarenje",
+      "description": "Velik uspon"
+    },
+    "guide_id": 1,
+    "guideLevelRequired": 2
+  }
+}
+
+### Get All Time Slots
+GET {{base}}/api/avanture/timeslots/all
+
+### Get Time Slot by ID
+GET {{base}}/api/avanture/timeslots/1
+
+### Update Time Slot
+PUT {{base}}/api/avanture/timeslots/update/1
+Content-Type: application/json
+
+{
+  "termMark": "PODNE",
+  "startTime": "2026-07-05",
+  "endTime": "2026-07-06",
+  "max_capacity": 15,
+  "current_occupancy": 2,
+  "adventuresRequest": {
+    "title": "Planinski uspon",
+    "description": "Uzbudljiva avantura na planini",
+    "difficulty_level": "MEDIUM",
+    "base_price": 150.0,
+    "adventure_categoriesRequest": {
+      "name": "Planinarenje",
+      "description": "Velik uspon"
+    },
+    "guide_id": 1,
+    "guideLevelRequired": 2
+  }
+}
+
+### Delete Time Slot
+DELETE {{base}}/api/avanture/timeslots/delete/1
+
+
+# ─────────────────────────────────────────────
+# VODICI - GUIDES
+# ─────────────────────────────────────────────
+
+### Create Guide
+POST {{base}}/api/vodici/guide/add
+Content-Type: application/json
+
+{
+  "first_name": "Nikola",
+  "last_name": "Nikolic",
+  "bio": "Iskusni planinski vodic sa 10 godina iskustva",
+  "rating": 4.5
+}
+
+### Get All Guides
+GET {{base}}/api/vodici/guide/all
+
+### Get Guide by ID
+GET {{base}}/api/vodici/guide/guideid/1
+
+### Update Guide
+PUT {{base}}/api/vodici/guide/update/1
+Content-Type: application/json
+
+{
+  "first_name": "Nikola",
+  "last_name": "Nikolic",
+  "bio": "Azurirana biografija vodica",
+  "rating": 4.8
+}
+
+### Get Average Rating
+GET {{base}}/api/vodici/guide/averagerating
+
+### Delete Guide
+DELETE {{base}}/api/vodici/guide/delete/1
+
+### Get Guide Adventures (cross-service via feign)
+GET {{base}}/api/vodici/guide/1/adventures
+
+
+# ─────────────────────────────────────────────
+# VODICI - CERTIFICATIONS
+# ─────────────────────────────────────────────
+
+### Create Certification
+POST {{base}}/api/vodici/certifications/add
+Content-Type: application/json
+
+{
+  "name": "Planinski vodic - nivo 3",
+  "issuing_body": "Planinarsko drustvo Srbije",
+  "expiry_date": "2028-01-01",
+  "guidesRequest": {
+    "first_name": "Nikola",
+    "last_name": "Nikolic",
+    "bio": "Iskusni planinski vodic sa 10 godina iskustva",
+    "rating": 4.5
+  },
+  "certificationLevel": 3
+}
+
+### Get All Certifications
+GET {{base}}/api/vodici/certifications/all
+
+### Get Certification by ID
+GET {{base}}/api/vodici/certifications/1
+
+### Update Certification
+PUT {{base}}/api/vodici/certifications/update/1
+Content-Type: application/json
+
+{
+  "name": "Planinski vodic - nivo 4",
+  "issuing_body": "Planinarsko drustvo Srbije",
+  "expiry_date": "2029-01-01",
+  "guidesRequest": {
+    "first_name": "Nikola",
+    "last_name": "Nikolic",
+    "bio": "Iskusni planinski vodic sa 10 godina iskustva",
+    "rating": 4.5
+  },
+  "certificationLevel": 4
+}
+
+### Delete Certification
+DELETE {{base}}/api/vodici/certifications/delete/1
+
+### Get Certifications by Guide Name
+GET {{base}}/api/vodici/certifications/Nikola/Nikolic
+
+
+# ─────────────────────────────────────────────
+# VODICI - LANGUAGES
+# ─────────────────────────────────────────────
+
+### Create Language
+POST {{base}}/api/vodici/languages/add
+Content-Type: application/json
+
+{
+  "language_name": "Srpski",
+  "language_code": "sr"
+}
+
+### Get All Languages
+GET {{base}}/api/vodici/languages/all
+
+### Get Language by ID
+GET {{base}}/api/vodici/languages/1
+
+### Update Language
+PUT {{base}}/api/vodici/languages/update/1
+Content-Type: application/json
+
+{
+  "language_name": "Engleski",
+  "language_code": "en"
+}
+
+### Delete Language
+DELETE {{base}}/api/vodici/languages/delete/1
+
+
+# ─────────────────────────────────────────────
+# VODICI - VACATIONS
+# ─────────────────────────────────────────────
+
+### Get Welcome Message
+GET {{base}}/api/vodici/vacations/welcome
+
+### Create Vacation
+POST {{base}}/api/vodici/vacations/add
+Content-Type: application/json
+
+{
+  "startDate": "2026-07-01",
+  "endDate": "2026-07-15",
+  "destination": "Kopaonik",
+  "guideRequest": {
+    "first_name": "Nikola",
+    "last_name": "Nikolic",
+    "bio": "Iskusni planinski vodic sa 10 godina iskustva",
+    "rating": 4.5
+  }
+}
+
+### Get All Vacations
+GET {{base}}/api/vodici/vacations/all
+
+### Get Vacation by ID
+GET {{base}}/api/vodici/vacations/1
+
+### Update Vacation
+PUT {{base}}/api/vodici/vacations/update/1
+Content-Type: application/json
+
+{
+  "startDate": "2026-08-01",
+  "endDate": "2026-08-10",
+  "destination": "Zlatibor",
+  "guideRequest": {
+    "first_name": "Nikola",
+    "last_name": "Nikolic",
+    "bio": "Iskusni planinski vodic sa 10 godina iskustva",
+    "rating": 4.5
+  }
+}
+
+### Delete Vacation
+DELETE {{base}}/api/vodici/vacations/delete/1
+
+### Get Vacations by Guide Name
+GET {{base}}/api/vodici/vacations/Nikola/Nikolic
